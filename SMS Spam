@@ -1,0 +1,232 @@
+
+
+**imports the libraries**
+
+ import numpy as np
+ import pandas as pd
+ import seaborn as sns
+ import matplotlib as plt
+ import nltk as nltk
+ import re
+
+SMS = pd.read_csv("/content/SMSSpamCollection", sep='\t', header=None)
+SMS.columns = ['lable' , 'body_text']
+SMS.head
+#SMS.tail
+#SMS.shape
+#SMS.info()
+#SMS.describe()
+
+import string
+string.punctuation
+
+def remove_punct(text):
+  text_nopunct = "".join([char for char in text if char not in string.punctuation ])
+  return text_nopunct
+
+SMS['body_text_nopunc'] = SMS ['body_text'].apply(lambda x: remove_punct(x.lower()))
+
+SMS.head()
+
+from nltk.tokenize import word_tokenize
+
+def tokenize(text):
+    tokens = re.split('\W+', text)
+    return tokens
+
+SMS['body_tokenized'] = SMS['body_text_nopunc'].apply(lambda x: tokenize(x))
+SMS.head()
+
+import nltk
+from nltk.corpus import stopwords
+nltk.download('stopwords')
+stopwords_En = set(stopwords.words('english'))
+
+def remove_stopwords(tokenized_list):
+  text = [word for word in tokenized_list if word not in stopwords_En ]
+  return text
+
+
+SMS['body_nostop'] = SMS['body_tokenized'].apply(lambda x: remove_stopwords(x))
+SMS.head()
+
+import nltk
+ps = nltk.PorterStemmer()
+
+def stemming(text):
+  ps = nltk.PorterStemmer()
+  stemmed_tokens = [ps.stem(word) for word in text]
+  return stemmed_tokens
+
+SMS['body_stemming'] = SMS['body_nostop'].apply(lambda x: stemming(x))
+SMS.head()
+
+import nltk
+nltk.download('wordnet')
+
+import nltk
+wn = nltk.WordNetLemmatizer()
+ps = nltk.PorterStemmer()
+
+def apply_lemmatization(tokenized_list):
+    lemmatizer = wn
+    lemmatized_tokens = [lemmatizer.lemmatize(token) for token in tokenized_list]
+    return lemmatized_tokens
+SMS['body_lemmatized'] = SMS['body_nostop'].apply(lambda x: apply_lemmatization(x))
+SMS.head()
+
+**lab week 5**
+
+import nltk as nl
+from nltk.util import ngrams
+
+def n_gram(text , num):
+  n_grams_sms = list(ngrams(text, num))
+  return n_grams_sms
+
+SMS['body_ngrams'] = SMS['body_lemmatized'].apply(lambda x: n_gram(x,2))
+SMS.head()
+
+**bold text**
+
+import nltk
+import pandas as pd
+
+nltk.download('averaged_perceptron_tagger')
+
+
+SMS['tagginges'] = SMS['body_tokenized'].apply(lambda x: nltk.pos_tag(x))
+SMS.head()
+
+SMS['meet'] = SMS['body_tokenized'].apply(lambda x: x.count('meeting'))
+SMS.head(5)
+
+SMS['free'] = SMS['body_tokenized'].apply(lambda x: x.count('free'))
+SMS.head(5)
+
+
+
+SMS['lenght'] = SMS['body_text'].apply(lambda x: len(x)-x.count(' '))
+SMS.head(5)
+
+import string
+def count_uppercase(text):
+  count = sum([1 for char in text if char.isupper()])
+  return round(count/(len(text) - text.count(" ")),3)*100
+
+SMS['uppercase'] = SMS['body_text'].apply(lambda x: count_uppercase(x))
+SMS.head()
+
+import string
+def count_punctuation(text):
+  count = sum([1 for char in text if char in string.punctuation])
+  return round(count/(len(text) - text.count(" ")),3)*100
+
+SMS['lenght'] = SMS['body_text'].apply(lambda x: len(x) - x.count(" "))
+SMS['punc_count'] = SMS['body_text'].apply(lambda x: count_punctuation(x))
+
+SMS.head(5)
+
+from sklearn.feature_extraction.text import CountVectorizer
+SMS['body_lemmatized'] = [' '.join(words) for words in SMS['body_lemmatized']]
+
+vect = CountVectorizer()
+count_vect = vect.fit_transform(SMS['body_lemmatized'])
+print(count_vect.shape)
+print('Sparse Matrix :\n' , count_vect )
+count_vect_SMS = pd.DataFrame(count_vect.toarray())
+count_vect_SMS.columns = vect.get_feature_names_out()
+print(count_vect_SMS)
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+import pandas as pd
+
+tfidf = TfidfVectorizer()
+features = tfidf.fit_transform(SMS['body_lemmatized'])
+pd.DataFrame(
+    features.todense() ,
+    columns = tfidf.get_feature_names_out()
+    )
+
+features_tfidf = tfidf.fit_transform(SMS['body_lemmatized'])
+print(features_tfidf.shape)
+print('Sparse Matrix :\n', features_tfidf)
+features_tfidf = pd.DataFrame(features_tfidf.toarray())
+features_tfidf.columns = tfidf.get_feature_names_out()
+features_tfidf
+
+# **ML**
+
+"""
+"The purpose of scaling is to reduce the data range to between 0 and 1,
+as the machine learning model we are using is sensitive to variations in the values.
+To achieve this, we apply the Min-Max Scaler from the sklearn.preprocessing module to perform scaling on the data."
+"""
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+
+"""
+The goal of scaling is to standardize the values of these variables so that they fall within a uniform range from 0 to 1.
+To achieve this, we apply the the previously initialized MinMaxScaler object
+to the data in the specified columns ('length,' 'uppercase,' 'punc_count').
+"""
+
+num_vars = ['lenght', 'uppercase','punc_count']
+SMS[num_vars] = scaler.fit_transform(SMS[num_vars])
+SMS.head()
+
+target = SMS['lable'] # the target of our model
+F = SMS ['body_lemmatized']
+#drop the string columns the ML do not understand
+final_SMS = SMS.drop(['lable', 'body_text', 'body_lemmatized',
+                      'body_text_nopunc',	'body_tokenized',	'body_nostop'
+                      	,'body_stemming',	'body_ngrams',	'tagginges','meet',	'free'], axis=1)
+
+#"This line of code obtains the shape of the 'features_tfidf' object."
+features_tfidf.shape
+
+features_tfidf.head()
+
+#merge the features_tfidf table and final_SMS table "the table that contain the integer data"
+final_SMS = pd.concat([final_SMS, pd.DataFrame(features_tfidf)], axis=1)
+final_SMS.head()
+
+"""
+The code splits the dataset (final_SMS and target) into training and testing sets.
+The training sets (x_train and y_train) are used to train the machine learning model,
+and the testing sets (x_test and y_test) are used to evaluate the model's performance.
+"""
+from sklearn.model_selection import train_test_split
+x_train, x_test, y_train, y_test = train_test_split(final_SMS, target, test_size=0.25)
+
+"""
+ check the dimensions of each dataset to ensure that the data splitting process has been done correctly
+ and that the shapes match the size we put 75% training and 25% testing
+"""
+
+print  ('x_train', x_train.shape)
+print  ('x_test', x_test.shape)
+print  ('y_train', y_train.shape)
+print  ('y_test', y_test.shape)
+
+
+x_train.head()
+
+#RandomForest is an ensemble learning method based on decision trees.
+from sklearn.ensemble import RandomForestClassifier
+
+# using parallelize in training process, making it faster when dealing with large datasets.
+rf_model = RandomForestClassifier( n_jobs = -1)
+
+"""
+ this code to train the random forest classifier on our training data.
+ - The `x_train` variable represents the training features (input data)
+ - The `y_train` represents the training target values (labels).
+ - The `fit` method builds the model by learning from the provided training data.
+"""
+rf_model.fit(x_train, y_train)
+
+'''
+"score" methode calculates the accuracy of the trained random forest classifier (`rf_model`) on the testing data (`x_test` and `y_test`).
+'''
+rf_model.score(x_test, y_test)
